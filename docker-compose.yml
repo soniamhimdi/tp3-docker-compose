@@ -1,0 +1,77 @@
+# Version de la syntaxe Docker Compose
+services:
+
+  # ─────────────────────────────────────
+  # SERVICE 1 : Base de données MongoDB
+  # ─────────────────────────────────────
+  database:
+    image: mongo:7          # Image officielle de Docker Hub (pas de Dockerfile)
+    container_name: tp3_database
+    restart: unless-stopped  # Redémarre automatiquement si crash
+    volumes:
+      # Volume NOMMÉ : les données survivent aux "docker compose down"
+      - database_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: tp3
+    networks:
+      - tp3_network
+
+  # ─────────────────────────────────────
+  # SERVICE 2 : API Node.js
+  # ─────────────────────────────────────
+  api:
+    build:
+      context: ./api         # Dossier contenant le Dockerfile
+      dockerfile: Dockerfile
+    container_name: tp3_api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"          # En dev, on expose l'API directement pour tester
+    volumes:
+      # Bind mount : le code local est monté dans le conteneur (live reload nodemon)
+      - ./api:/app
+      # Volume anonyme pour isoler node_modules du conteneur de l'hôte
+      - /app/node_modules
+    environment:
+      PORT: 5000
+      MONGO_URL: mongodb://database:27017/tp3   # "database" = nom du service
+      NODE_ENV: development
+    depends_on:
+      - database             # Attend que le service database soit démarré
+    networks:
+      - tp3_network
+
+  # ─────────────────────────────────────
+  # SERVICE 3 : Client React
+  # ─────────────────────────────────────
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: tp3_client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules    # Isolation des node_modules (même astuce que l'API)
+    environment:
+      # Le navigateur ne connaît pas "api", il connaît localhost
+      VITE_API_URL: http://localhost:5000/api
+    depends_on:
+      - api
+    networks:
+      - tp3_network
+
+# ─────────────────────────────────────
+# VOLUMES NOMMÉS
+# ─────────────────────────────────────
+volumes:
+  database_data:   # Docker gère ce volume, les données sont persistantes
+
+# ─────────────────────────────────────
+# RÉSEAU INTERNE
+# ─────────────────────────────────────
+networks:
+  tp3_network:
+    driver: bridge  # Les services peuvent se parler par leur nom de service

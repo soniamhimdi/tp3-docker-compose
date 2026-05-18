@@ -1,0 +1,60 @@
+services:
+
+  # ─────────────────────────────────────
+  # Base de données (identique au dev)
+  # ─────────────────────────────────────
+  database:
+    image: mongo:7
+    container_name: tp3_database_prod
+    restart: always
+    volumes:
+      - database_data:/data/db
+    # En prod : pas de port exposé (sécurité, accessible seulement en interne)
+    networks:
+      - tp3_network
+
+  # ─────────────────────────────────────
+  # API (image de prod, pas de nodemon)
+  # ─────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: tp3_api_prod
+    restart: always
+    # Pas de "ports" exposés : l'API est accessible SEULEMENT via nginx
+    environment:
+      PORT: 5000
+      MONGO_URL: mongodb://database:27017/tp3
+      NODE_ENV: production
+    command: ["node", "server.js"]   # En prod : pas de nodemon
+    depends_on:
+      - database
+    networks:
+      - tp3_network
+
+  # ─────────────────────────────────────
+  # Nginx : sert le client ET proxifie l'API
+  # ─────────────────────────────────────
+  nginx:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.prod     # Multi-stage build : build React + nginx
+    container_name: tp3_nginx_prod
+    restart: always
+    ports:
+      - "80:80"          # UN SEUL port exposé : tout passe par nginx
+    volumes:
+      # On écrase la config nginx de l'image avec la nôtre
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    networks:
+      - tp3_network
+
+volumes:
+  database_data:
+
+networks:
+  tp3_network:
+    driver: bridge

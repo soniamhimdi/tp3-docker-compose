@@ -1,0 +1,28 @@
+# ============================================
+# ÉTAPE 1 : Builder (construit l'application)
+# ============================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+# Compile React → fichiers statiques dans /app/dist
+RUN npm run build
+
+# ============================================
+# ÉTAPE 2 : Serveur (sert les fichiers)
+# ============================================
+# On repart d'une image nginx vierge et légère
+# L'image finale ne contient PAS Node.js, seulement nginx + les fichiers buildés
+FROM nginx:alpine
+
+# On copie uniquement le résultat du build
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
